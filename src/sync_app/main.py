@@ -25,7 +25,8 @@ def main():
         run_polling_loop()
     elif args.command == "serve":
         import uvicorn
-        uvicorn.run("sync_app.app:app", host=args.host, port=args.port, reload=False)
+        # Run via module path to work from repo root
+        uvicorn.run("src.sync_app.app:app", host=args.host, port=args.port, reload=False)
     elif args.command == "validate":
         from .lead_client import AirtableLeadClient
         from .task_client import TrelloTaskClient

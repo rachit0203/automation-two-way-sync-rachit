@@ -38,9 +38,10 @@ class TrelloTaskClient:
                 continue
             for card in self._list_cards_in_list(list_id):
                 # Expect external lead_id stored in card desc or custom pattern "LeadID: <id>"
-                desc: str = card.get("desc") or ""
+                raw_desc = card.get("desc")
+                desc: str = str(raw_desc) if raw_desc is not None else ""
                 lead_id = None
-                if "LeadID:" in desc:
+                if isinstance(desc, str) and "LeadID:" in desc:
                     try:
                         lead_id = desc.split("LeadID:")[-1].strip().splitlines()[0].strip()
                     except Exception:
@@ -76,7 +77,7 @@ class TrelloTaskClient:
             data=payload,
             timeout=20,
         )
-        if r.status_code not in (200):
+        if r.status_code != 200:
             body = r.text
             self.logger.error(f"Trello create card error {r.status_code}: {body}")
             raise httpx.HTTPStatusError("Trello create card failed", request=r.request, response=r)
@@ -94,7 +95,9 @@ class TrelloTaskClient:
             return self.cfg.trello_list_todo_id
         if status == TaskStatus.IN_PROGRESS:
             return self.cfg.trello_list_in_progress_id
-        return self.cfg.trello_list_done_id
+        if status == TaskStatus.DONE:
+            return self.cfg.trello_list_done_id
+        raise ValueError(f"Unknown TaskStatus: {status!r}")
 
     def find_task_by_lead_id(self, lead_id: str) -> Optional[Dict]:
         for t in self.list_tasks():
@@ -106,7 +109,7 @@ class TrelloTaskClient:
     def update_task_status(self, task_id: str, status: TaskStatus) -> None:
         list_id = self._status_to_list_id(status)
         r = httpx.put(f"{self.api}/cards/{task_id}", params={**self.base_params, "idList": list_id}, timeout=20)
-        if r.status_code not in (200):
+        if r.status_code != 200:
             body = r.text
             self.logger.error(f"Trello move card error {r.status_code}: {body}")
             raise httpx.HTTPStatusError("Trello move card failed", request=r.request, response=r)

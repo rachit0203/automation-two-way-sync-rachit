@@ -1,4 +1,5 @@
 from typing import List
+from tenacity import RetryError
 from .lead_client import AirtableLeadClient
 from .task_client import TrelloTaskClient
 from .mapping import STATUS_MAP_LEAD_TO_TASK, STATUS_MAP_TASK_TO_LEAD
@@ -24,22 +25,44 @@ class SyncService:
                 title = f"Follow up: {lead.get('name')}"
                 notes = f"Email: {lead.get('email')}\nSource: {lead.get('source') or ''}"
                 self.tasks.ensure_task(title=title, lead_id=lead.get("id"), status=task_status, notes=notes)
+            except RetryError as re:
+                try:
+                    last_exc = re.last_attempt.exception()
+                except Exception:
+                    last_exc = None
+                self.logger.error(
+                    f"initial_sync failed for lead {lead.get('id')}: RetryError: {re}; last_exception: {last_exc}"
+                )
             except Exception as e:
-                self.logger.error(f"initial_sync failed for lead {lead.get('id')}: {e}")
+                self.logger.error(f"initial_sync failed for lead {lead.get('id')}: {repr(e)}")
 
     def lead_to_task_updates(self) -> None:
         leads = self.leads.list_leads()
         for lead in leads:
             try:
-                lead_status = lead.get("status")
+                lead_status_raw = lead.get("status")
+                # Normalize to Enum to match mapping keys
+                lead_status = (
+                    lead_status_raw
+                    if isinstance(lead_status_raw, LeadStatus)
+                    else LeadStatus(lead_status_raw)
+                )
                 desired_status = STATUS_MAP_LEAD_TO_TASK.get(lead_status)
                 if not desired_status:
                     continue
                 existing = self.tasks.find_task_by_lead_id(lead.get("id"))
                 if existing and existing.get("status") != desired_status:
                     self.tasks.update_task_status(existing.get("id"), desired_status)
+            except RetryError as re:
+                try:
+                    last_exc = re.last_attempt.exception()
+                except Exception:
+                    last_exc = None
+                self.logger.error(
+                    f"lead_to_task_updates failed for lead {lead.get('id')}: RetryError: {re}; last_exception: {last_exc}"
+                )
             except Exception as e:
-                self.logger.error(f"lead_to_task_updates failed for lead {lead.get('id')}: {e}")
+                self.logger.error(f"lead_to_task_updates failed for lead {lead.get('id')}: {repr(e)}")
 
     def task_to_lead_updates(self) -> None:
         tasks = self.tasks.list_tasks()
@@ -47,12 +70,26 @@ class SyncService:
             if not t.get("leadId"):
                 continue
             try:
-                task_status = t.get("status")
+                task_status_raw = t.get("status")
+                # Normalize to Enum to match mapping keys
+                task_status = (
+                    task_status_raw
+                    if isinstance(task_status_raw, TaskStatus)
+                    else TaskStatus(task_status_raw)
+                )
                 desired_lead_status = STATUS_MAP_TASK_TO_LEAD.get(task_status)
                 if desired_lead_status:
                     self.leads.update_lead_status(t.get("leadId"), desired_lead_status)
+            except RetryError as re:
+                try:
+                    last_exc = re.last_attempt.exception()
+                except Exception:
+                    last_exc = None
+                self.logger.error(
+                    f"task_to_lead_updates failed for lead {t.get('leadId')}: RetryError: {re}; last_exception: {last_exc}"
+                )
             except Exception as e:
-                self.logger.error(f"task_to_lead_updates failed for lead {t.get('leadId')}: {e}")
+                self.logger.error(f"task_to_lead_updates failed for lead {t.get('leadId')}: {repr(e)}")
 
     def run_full_sync_cycle(self) -> None:
         self.initial_sync()

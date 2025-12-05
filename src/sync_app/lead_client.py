@@ -33,18 +33,20 @@ class AirtableLeadClient:
             data = r.json()
             for rec in data.get("records", []):
                 fields = rec.get("fields", {})
-                # Normalize status to LeadStatus enum (default NEW)
-                raw_status = (fields.get("status") or fields.get("Status") or "NEW").upper()
-                try:
-                    status = LeadStatus(raw_status)
-                except Exception:
-                    status = LeadStatus.NEW
+                # Map Airtable Status values to LeadStatus enum
+                raw_status = fields.get("Status", "Todo")
+                status_map = {
+                    "Todo": LeadStatus.NEW,
+                    "In progress": LeadStatus.CONTACTED,
+                    "Done": LeadStatus.QUALIFIED,
+                }
+                status = status_map.get(raw_status, LeadStatus.NEW)
                 lead = {
                     "id": rec.get("id"),
-                    "name": fields.get("name") or fields.get("Name") or "",
-                    "email": fields.get("email") or fields.get("Email") or "",
+                    "name": fields.get("Name") or "",
+                    "email": fields.get("Email") or fields.get("Notes") or "",
                     "status": status,
-                    "source": fields.get("source") or fields.get("Source") or None,
+                    "source": fields.get("Source") or None,
                 }
                 leads.append(lead)
             offset = data.get("offset")
@@ -55,11 +57,18 @@ class AirtableLeadClient:
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
     def update_lead_status(self, lead_id: str, status) -> None:
         url = f"{self.base_url}/{lead_id}"
-        # Accept enum or string
-        status_value = status.value if hasattr(status, "value") else str(status)
-        payload = {"fields": {"status": status_value}}
+        # Map LeadStatus enum to Airtable Status field values
+        raw_value = status.value if hasattr(status, "value") else str(status)
+        mapping = {
+            "NEW": "Todo",
+            "CONTACTED": "In progress",
+            "QUALIFIED": "Done",
+            "LOST": "Done",
+        }
+        status_value = mapping.get(str(raw_value).upper(), "Todo")
+        payload = {"fields": {"Status": status_value}}
         r = httpx.patch(url, headers=self.headers, json=payload, timeout=20)
-        if r.status_code not in (200):
+        if r.status_code != 200:
             body = r.text
             self.logger.error(f"Airtable update_lead_status error {r.status_code}: {body}")
             raise httpx.HTTPStatusError("Airtable update_lead_status failed", request=r.request, response=r)
