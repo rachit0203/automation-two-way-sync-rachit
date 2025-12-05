@@ -90,11 +90,6 @@ class SyncService:
                 desired_lead_status = STATUS_MAP_TASK_TO_LEAD.get(task_status)
                 if desired_lead_status:
                     self.leads.update_lead_status(t.get("leadId"), desired_lead_status)
-                    sync_note = f"🔄 Status updated from Trello: {task_status.value} → {desired_lead_status.value}"
-                    try:
-                        self.leads.append_note(t.get("leadId"), sync_note)
-                    except Exception as note_err:
-                        self.logger.warning(f"Could not append note to lead {t.get('leadId')}: {note_err}")
             except RetryError as re:
                 try:
                     last_exc = re.last_attempt.exception()
