@@ -33,7 +33,6 @@ class AirtableLeadClient:
             data = r.json()
             for rec in data.get("records", []):
                 fields = rec.get("fields", {})
-                # Map Airtable Status values to LeadStatus enum
                 raw_status = fields.get("Status", "Todo")
                 status_map = {
                     "Todo": LeadStatus.NEW,
@@ -57,7 +56,6 @@ class AirtableLeadClient:
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
     def update_lead_status(self, lead_id: str, status) -> None:
         url = f"{self.base_url}/{lead_id}"
-        # Map LeadStatus enum to Airtable Status field values
         raw_value = status.value if hasattr(status, "value") else str(status)
         mapping = {
             "NEW": "Todo",

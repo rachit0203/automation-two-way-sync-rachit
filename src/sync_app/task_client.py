@@ -16,7 +16,6 @@ class TrelloTaskClient:
     def _list_cards_in_list(self, list_id: str) -> List[Dict]:
         r = httpx.get(f"{self.api}/lists/{list_id}/cards", params=self.base_params, timeout=20)
         if r.status_code != 200:
-            # Provide clearer diagnostics for common auth problems
             body = r.text
             if r.status_code == 401:
                 self.logger.error("Trello 401: invalid key/token or token lacks access to board/lists.")
@@ -37,7 +36,6 @@ class TrelloTaskClient:
             if not list_id:
                 continue
             for card in self._list_cards_in_list(list_id):
-                # Expect external lead_id stored in card desc or custom pattern "LeadID: <id>"
                 raw_desc = card.get("desc")
                 desc: str = str(raw_desc) if raw_desc is not None else ""
                 lead_id = None
@@ -57,20 +55,16 @@ class TrelloTaskClient:
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
     def ensure_task(self, title: str, lead_id: str, status: TaskStatus, notes: Optional[str] = None) -> Dict:
-        # Idempotency: search existing cards across lists with "LeadID: <lead_id>" in description
         existing = self.find_task_by_lead_id(lead_id)
         if existing:
-            # update status if needed by moving card to right list
             self.update_task_status(existing["id"], status)
             return existing
-        # create in appropriate list
         list_id = self._status_to_list_id(status)
         payload = {
             "name": title,
             "idList": list_id,
             "desc": f"LeadID: {lead_id}\n" + (notes or ""),
         }
-        # Trello accepts key/token as query, and fields in form body
         r = httpx.post(
             f"{self.api}/cards",
             params=self.base_params,

@@ -9,7 +9,6 @@ cfg = Config()
 try:
     cfg.validate()
 except Exception:
-    # Validation also done in CLI; for /health we still want to respond.
     pass
 logger = get_logger("app", cfg.log_level)
 

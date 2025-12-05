@@ -23,7 +23,6 @@ class SyncService:
                 lead_status = lead.get("status")
                 task_status = STATUS_MAP_LEAD_TO_TASK.get(lead_status, TaskStatus.TODO)
                 title = f"📋 Follow up: {lead.get('name')}"
-                # Create detailed card description
                 notes_parts = [
                     f"LeadID: {lead.get('id')}",
                     "",
@@ -54,7 +53,6 @@ class SyncService:
         for lead in leads:
             try:
                 lead_status_raw = lead.get("status")
-                # Normalize to Enum to match mapping keys
                 lead_status = (
                     lead_status_raw
                     if isinstance(lead_status_raw, LeadStatus)
@@ -84,7 +82,6 @@ class SyncService:
                 continue
             try:
                 task_status_raw = t.get("status")
-                # Normalize to Enum to match mapping keys
                 task_status = (
                     task_status_raw
                     if isinstance(task_status_raw, TaskStatus)
@@ -93,7 +90,6 @@ class SyncService:
                 desired_lead_status = STATUS_MAP_TASK_TO_LEAD.get(task_status)
                 if desired_lead_status:
                     self.leads.update_lead_status(t.get("leadId"), desired_lead_status)
-                    # Update Airtable Notes with sync info
                     sync_note = f"🔄 Status updated from Trello: {task_status.value} → {desired_lead_status.value}"
                     try:
                         self.leads.append_note(t.get("leadId"), sync_note)

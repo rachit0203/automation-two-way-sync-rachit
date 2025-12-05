@@ -15,7 +15,6 @@ def main():
 
     cfg = Config()
     logger = get_logger("cli", cfg.log_level)
-    # Validate configuration up-front to fail fast with clear error
     cfg.validate()
 
     if args.command == "sync-once":
@@ -25,7 +24,6 @@ def main():
         run_polling_loop()
     elif args.command == "serve":
         import uvicorn
-        # Run via module path to work from repo root
         uvicorn.run("src.sync_app.app:app", host=args.host, port=args.port, reload=False)
     elif args.command == "validate":
         from .lead_client import AirtableLeadClient
