@@ -22,8 +22,21 @@ class SyncService:
             try:
                 lead_status = lead.get("status")
                 task_status = STATUS_MAP_LEAD_TO_TASK.get(lead_status, TaskStatus.TODO)
-                title = f"Follow up: {lead.get('name')}"
-                notes = f"Email: {lead.get('email')}\nSource: {lead.get('source') or ''}"
+                title = f"📋 Follow up: {lead.get('name')}"
+                # Create detailed card description
+                notes_parts = [
+                    f"LeadID: {lead.get('id')}",
+                    "",
+                    "👤 Contact Information:",
+                    f"Name: {lead.get('name')}",
+                    f"Email: {lead.get('email')}",
+                    "",
+                    f"📊 Current Status: {lead_status.value if hasattr(lead_status, 'value') else lead_status}",
+                ]
+                if lead.get('source'):
+                    notes_parts.extend(["", f"📍 Source: {lead.get('source')}"])
+                notes_parts.extend(["", "---", "🔄 Synced from Airtable"])
+                notes = "\n".join(notes_parts)
                 self.tasks.ensure_task(title=title, lead_id=lead.get("id"), status=task_status, notes=notes)
             except RetryError as re:
                 try:
@@ -80,6 +93,12 @@ class SyncService:
                 desired_lead_status = STATUS_MAP_TASK_TO_LEAD.get(task_status)
                 if desired_lead_status:
                     self.leads.update_lead_status(t.get("leadId"), desired_lead_status)
+                    # Update Airtable Notes with sync info
+                    sync_note = f"🔄 Status updated from Trello: {task_status.value} → {desired_lead_status.value}"
+                    try:
+                        self.leads.append_note(t.get("leadId"), sync_note)
+                    except Exception as note_err:
+                        self.logger.warning(f"Could not append note to lead {t.get('leadId')}: {note_err}")
             except RetryError as re:
                 try:
                     last_exc = re.last_attempt.exception()
